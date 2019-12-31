@@ -14,16 +14,20 @@ import RxDataSources
 struct MovieListCellViewModel: IdentifiableType, Equatable {
     
     var identity: Int64
-    var imageUrl: String
+    var backdropUrl: String
+    var posterUrl: String
     var image: BehaviorRelay<ImageState> 
     var title: BehaviorRelay<String>
     var popularity: BehaviorRelay<Float>
+    var booked: BehaviorRelay<Bool>
     
     init() {
         self.image = BehaviorRelay<ImageState>(value: .none)
         self.title = BehaviorRelay<String>(value: "")
-        self.popularity = BehaviorRelay<Float>(value: 0.0) 
-        self.imageUrl = ""
+        self.popularity = BehaviorRelay<Float>(value: 0.0)
+        self.booked = BehaviorRelay<Bool>(value: false)
+        self.backdropUrl = ""
+        self.posterUrl = ""
         self.identity = 0
     }
     

@@ -28,16 +28,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         let realm = try! Realm(configuration: realmConfig)
         print("realm db:\(realmConfig.fileURL?.absoluteString ?? "")")
         
+        // APIClient configure
+        let apiClient = APIClient()
+                
+        
         // clear old data
         try! realm.write {
             realm.deleteAll()
         }
         
-        // APIClient configure
-        let apiClient = APIClient()
-        
         // AppCenter configure
-        let appCenter = AppCenter(apiClient: apiClient, realm: realm)
+        AppCenter.initial(apiClient: apiClient, realm: realm)
         
         // root UI configure
         let navigationController = UINavigationController()
@@ -46,7 +47,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         self.window?.rootViewController = navigationController
         
         // Coordinator start
-        let rootCoordinator = RootCoordinator(navigationController: navigationController, appCenter: appCenter)
+        let rootCoordinator = RootCoordinator(navigationController: navigationController, appCenter: AppCenter.shared)
         rootCoordinator.start()
         
         self.window?.makeKeyAndVisible()

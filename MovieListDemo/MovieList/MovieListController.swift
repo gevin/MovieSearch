@@ -14,6 +14,12 @@ import Realm
 import RealmSwift
 import SVProgressHUD
 
+extension UIScrollView {
+    func  isNearBottomEdge(edgeOffset: CGFloat = 20.0) -> Bool {
+        return self.contentOffset.y + self.frame.size.height + edgeOffset > self.contentSize.height
+    }
+}
+
 struct MovieListSectionModel {
     var header: String
     var items:[MovieListCellViewModel]
@@ -36,10 +42,6 @@ extension MovieListSectionModel: AnimatableSectionModelType {
 class MovieListController: UIViewController, ViewType {
     
     var viewModel: MovieListViewModelType?
-
-    var movieInteractor: MovieInteractor? = nil
-    var apiClient: APIClient?
-    var realm: Realm?
     
     var disposeBag = DisposeBag()
     
@@ -47,6 +49,12 @@ class MovieListController: UIViewController, ViewType {
     var refreshControl: UIRefreshControl = UIRefreshControl(frame: CGRect.zero)
     
     var sectionRelay = BehaviorRelay<[MovieListSectionModel]>( value: [MovieListSectionModel(header: "", items: [])] )
+    
+    var isLoadMore: Bool = false
+    
+    var original_offset: CGPoint = CGPoint.zero
+    
+    var noDataView = NoDataView.create()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -58,6 +66,15 @@ class MovieListController: UIViewController, ViewType {
     
     func bindUI() {
         
+        // if no data, clicked refresh
+        self.noDataView.reloadButton.rx.tap.throttle(1, scheduler: MainScheduler.instance)
+            .subscribe(onNext: {[weak self] () in
+                guard let strongSelf = self else {return}
+                strongSelf.viewModel?.refresh()
+            })
+            .disposed(by: disposeBag)
+        
+        // receive data
         self.viewModel?.movieList
             .drive(onNext: {[weak self] (list:[MovieListCellViewModel]) in
                 guard let strongSelf = self else {return}
@@ -65,8 +82,13 @@ class MovieListController: UIViewController, ViewType {
                 if sections.count == 0 {
                     sections.append( MovieListSectionModel(header: "", items: []) )
                 }
-                sections[0].items = list
-                strongSelf.sectionRelay.accept(sections)
+                if list.count == 0 {
+                    strongSelf.collectionView.backgroundView = strongSelf.noDataView
+                } else {
+                    strongSelf.collectionView.backgroundView = nil
+                    sections[0].items = list
+                    strongSelf.sectionRelay.accept(sections)
+                }
             })
             .disposed(by: disposeBag)
         
@@ -89,9 +111,7 @@ class MovieListController: UIViewController, ViewType {
     }
     
     func collectionViewConfigure() {
-        
         self.collectionView.delegate = self
-        
         // pulldown to refresh 
         if #available( iOS 10.0, *) {
             self.collectionView.refreshControl = self.refreshControl
@@ -119,46 +139,58 @@ class MovieListController: UIViewController, ViewType {
             layout.estimatedItemSize = CGSize(width: UIScreen.main.bounds.size.width - 32, height: 50)
         }
         // config cell
-        let dataSource = RxCollectionViewSectionedReloadDataSource<MovieListSectionModel>(configureCell: { (_, collectionView, indexPath, model: MovieListCellViewModel ) -> UICollectionViewCell in
+        let dataSource = MyCollectionAnimationDataSource<MovieListSectionModel>(configureCell: { (_, collectionView, indexPath, model: MovieListCellViewModel ) -> UICollectionViewCell in
             let cell = MovieListCell.cellWith(collectionView: collectionView, indexPath: indexPath)
-            model.title
-                .bind(to: cell.titleLabel.rx.text )
-                .disposed(by: cell.disposeBag)
-            model.popularity
-                .map({"\($0)"})
-                .bind(to: cell.popularityLabel.rx.text)
-                .disposed(by: cell.disposeBag)
-            model.image
-                .bind(to: cell.backdropImageView.rx.state)
-                .disposed(by: cell.disposeBag)
+            cell.configure(viewModel: model, collectionView: collectionView, indexPath: indexPath)
             return cell
         })
         self.sectionRelay.bind(to: self.collectionView.rx.items(dataSource: dataSource) ).disposed(by: disposeBag)
-
-    }
-
-    @IBAction func testClicked(_ sender: Any) {
         
-        var movieQueryData = MovieDiscoverQuery()
-        movieQueryData.page = 1
-        movieQueryData.primary_release_date_lte = "2016-12-31"
-        movieQueryData.sort_by = MovieSortBy.release_date_desc
+        // reload data
+//        dataSource.dataReloded.asObservable()
+//            .filter({_ in !self.isLoadMore})
+//            .subscribe(onNext: {[weak self] (event:Event<[MovieListSectionModel]>) in
+//                guard let strongSelf = self else {return}
+//                DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 1.0, execute: { 
+//                    strongSelf.collectionView.layoutIfNeeded()
+//                })
+//            })
+//            .disposed(by: self.disposeBag)
         
-        self.apiClient?.movieDiscover(querys: movieQueryData)
-            .debug()
-            .mapJSON()
-            .subscribe(onNext: { (result) in
-                print(result)
+        // load more
+        collectionView.rx.contentOffset
+            .filter({_ in 
+                // scroll to bottom and not loading 
+                return self.collectionView.isNearBottomEdge(edgeOffset: 20.0) && !self.isLoadMore 
+            })
+            .withLatestFrom(self.rx.viewDidAppear)
+            .flatMap { state in state ? Signal.just(()) : Signal.empty() }
+            .do(onNext: {[weak self] () in
+                guard let strongSelf = self else {return}
+                // save original offset
+                strongSelf.original_offset = strongSelf.collectionView.contentOffset
+                // trigger load next page
+                strongSelf.viewModel?.loadNextPage()
+                strongSelf.isLoadMore = true
+            })
+            .flatMap({ () -> Observable<Event<[MovieListSectionModel]>> in
+                return dataSource.dataReloded.asObservable() // observe collectionView reloadData completed event
+            })
+            .subscribe(onNext: {[weak self] (_) in
+                guard let strongSelf = self else {return}
+                // when reload completed, adjust content offset and set isLoadMore = false 
+                print("offset:\(strongSelf.collectionView.contentOffset)")
+                strongSelf.collectionView.setContentOffset(strongSelf.original_offset, animated: false)
+                strongSelf.isLoadMore = false
             })
             .disposed(by: self.disposeBag)
-        
     }
-    
 }
 
 extension MovieListController: UICollectionViewDelegate {
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        
+        let cellViewModel = self.sectionRelay.value[indexPath.section].items[indexPath.row]
+        self.viewModel?.selectMovie(movieId: cellViewModel.identity)
     }
 }

@@ -45,7 +45,17 @@ class MovieListCoordinator: CoordinatorType {
     }
     
     func gotoMovieDetail( movieId: Int64 ) {
-        
+        let nextCoordinator = MovieDetailCoordinator(navigationController: self._navigationController, appCenter: self.appCenter, movieId: movieId)
+        self.childCoordinators.append(nextCoordinator)
+        nextCoordinator.start()
+        // remove nextCoordinator while pop
+        nextCoordinator.didFinish.subscribe(onNext: { (coordinatorOrNil:CoordinatorType?) in
+            guard let coordinator = coordinatorOrNil else { return }
+            if let index = self.childCoordinators.firstIndex(where: { ($0 === coordinator ) }) {
+                self.childCoordinators.remove(at: index)
+            }
+        })
+        .disposed(by: disposeBag)
     }
 
 }

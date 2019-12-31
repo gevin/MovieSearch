@@ -124,21 +124,16 @@ class MovieDetailModel: Object, Decodable {
     
 }
 
-
 class MovieGenreModel: Object, Decodable {
-    
     @objc dynamic var id: Int64 //12,
     @objc dynamic var name: String //"Adventure"
     
     override static func primaryKey() -> String? {
         return "id"
     }
-
 }
 
-
 class MovieCollectionModel: Object, Decodable {
-    
     @objc dynamic var id: Int64 //33,
     @objc dynamic var logo_path: String // "/8lvHyhjr8oUKOOy2dKXoALWKdp0.png",
     @objc dynamic var name: String //"Universal Pictures",
@@ -147,19 +142,45 @@ class MovieCollectionModel: Object, Decodable {
     override static func primaryKey() -> String? {
         return "id"
     }
-
 }
 
-
 class MovieProductionCompanyModel: Object, Decodable {
-
-    @objc dynamic var id: Int64 //33,
-    @objc dynamic var logo_path: String //"/8lvHyhjr8oUKOOy2dKXoALWKdp0.png",
-    @objc dynamic var name: String //"Universal Pictures",
-    @objc dynamic var origin_country: String //"US"
+    @objc dynamic var id: Int64 = 0 //33,
+    @objc dynamic var logo_path: String = "" //"/8lvHyhjr8oUKOOy2dKXoALWKdp0.png",
+    @objc dynamic var name: String = "" //"Universal Pictures",
+    @objc dynamic var origin_country: String = "" //"US"
     
     override static func primaryKey() -> String? {
         return "id"
     }
-
+    
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case logo_path
+        case name
+        case origin_country
+    }
+    
+    required init() {
+        super.init()
+    }
+    
+    required init(value: Any, schema: RLMSchema) {
+        super.init(value: value, schema: schema)
+    }
+    
+    required init(realm: RLMRealm, schema: RLMObjectSchema) {
+        super.init(realm: realm, schema: schema)
+    }
+    
+    required init(from decoder: Decoder) throws {
+        super.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id        = try container.decodeIfPresent(Int64.self       , forKey: .id ) ?? 0
+        self.logo_path = try container.decodeIfPresent(String.self      , forKey: .logo_path ) ?? ""
+        self.name      = try container.decodeIfPresent(String.self      , forKey: .name ) ?? ""
+        self.origin_country = try container.decodeIfPresent(String.self , forKey: .origin_country ) ?? ""
+    }
+    
 }
+

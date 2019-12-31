@@ -88,6 +88,7 @@ class APIClient: NSObject {
     var provider = MoyaProvider<MovieAPI>()
     private var _api_key = "046025412164cdff60aa810d52a8d4ea"
     private var _token = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIwNDYwMjU0MTIxNjRjZGZmNjBhYTgxMGQ1MmE4ZDRlYSIsInN1YiI6IjVlMDgwMmYzYTFjNTlkMDAxOGE4MWJiMSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.1vLBQn6oQo-GO_wkBTkIFIykmXZXvqxBNtp_zvbi0Ck"
+    let queue = DispatchQueue(label: "com.gevinchen.moviediscover")
     
     override init() {
         super.init()
@@ -101,13 +102,12 @@ class APIClient: NSObject {
     }
     
     func movieDiscover( querys: MovieDiscoverQuery ) -> Observable<Response> {
-//        
         do {
             let encoder = JSONEncoder()
             let data = try encoder.encode(querys)
             let params = try JSONSerialization.jsonObject(with: data, options: JSONSerialization.ReadingOptions.init(rawValue: 0)) as! [String : Any]
             
-            let apiRequest =  provider.rx.request(.movieDiscover(querys: params ), callbackQueue: DispatchQueue.main)
+            let apiRequest =  provider.rx.request(.movieDiscover(querys: params ), callbackQueue: queue)
                 .asObservable()
             return apiRequest
         } catch {
@@ -115,11 +115,16 @@ class APIClient: NSObject {
         }
     }
     
+    func movieDetail( movieId: Int64, language: String ) -> Observable<Response> {
+        return provider.rx.request(.movieDetail(movieId: "\(movieId)", language: language), callbackQueue: queue)
+            .asObservable()
+    }
+    
     func getConfiguration() -> Observable<Response> {
-        let apiRequest =  provider.rx.request(.configuration(), callbackQueue: DispatchQueue.main)
+        let apiRequest =  provider.rx.request(.configuration(), callbackQueue: queue)
             .asObservable()
         return apiRequest
     }
-        
+    
 
 }

@@ -22,9 +22,18 @@ class MovieDetailCoordinator: CoordinatorType {
     
     var disposeBag = DisposeBag()
     
-    init( navigationController: UINavigationController?, appCenter: AppCenter ) {
+    var didFinish = PublishSubject<CoordinatorType?>()
+    
+    var movieId: Int64 = 0
+    
+    deinit {
+        print("MovieDetailCoordinator dealloc")
+    }
+    
+    init( navigationController: UINavigationController?, appCenter: AppCenter, movieId: Int64 ) {
         self._navigationController = navigationController
         self.appCenter = appCenter
+        self.movieId = movieId
     }
     
     func start() {
@@ -34,10 +43,20 @@ class MovieDetailCoordinator: CoordinatorType {
         }
         let viewModel = MovieDetailViewModel(coordinator: self,
                                              movieInteractor: appCenter.movieInteractor, 
-                                             imageInteractor: appCenter.imageInteractor)
+                                             imageInteractor: appCenter.imageInteractor,
+                                             movieId: self.movieId )
         vc.viewModel = viewModel
         self.viewController = vc
         self._navigationController?.pushViewController( vc, animated: true)
+        
+        // observe dismiss or pop
+        vc.rx.viewWillDisappear
+        .filter({[weak self] _ in (self?.viewController?.isMovingFromParent ?? false) })
+        .map({[weak self] (_) -> CoordinatorType? in
+            return self
+        })
+        .bind(to: didFinish)
+        .disposed(by: self.disposeBag)
     }
     
     func back() {

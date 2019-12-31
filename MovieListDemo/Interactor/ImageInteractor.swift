@@ -16,6 +16,7 @@ import Moya
 
 enum ImageInteractorError: Error {
     case sizeLevelOutOfBounds(String)
+    case invalidImagePath(String)
 }
 
 enum ImageState {
@@ -51,6 +52,7 @@ class ImageInteractor: InteractorType {
         }
         
         let request = self.apiClient.getConfiguration()
+            .observeOn(MainScheduler.instance)
             .debug()
             .map(ImageConfiguration.self, atKeyPath: "images")
             .do(onNext: {[weak self] (imgConfiguration) in
@@ -72,6 +74,7 @@ class ImageInteractor: InteractorType {
     
     /// give backdrop path and compose a whole image url, then download image 
     func getBackdropImage( backdropPath: String, sizeLevel: Int )  -> Observable<ImageState> {
+        guard backdropPath.count > 0 else { return Observable.error(ImageInteractorError.invalidImagePath("backdropPath is empty."))}
         let result = self.realm.objects(ImageConfiguration.self)
         if result.count == 0 {
             return self.getImageConfiguration()
@@ -96,6 +99,36 @@ class ImageInteractor: InteractorType {
                 return self.getImage(urlString: imageUrl)
             } else {
                 return Observable.error( ImageInteractorError.sizeLevelOutOfBounds("backdrop sizes \(sizeLevel) out of bound \(imgConfiguration.backdrop_sizes.count)"))
+            }
+        }
+    }
+    
+    func getPosterImage( posterPath: String, sizeLevel: Int )  -> Observable<ImageState> {
+        guard posterPath.count > 0 else { return Observable.error(ImageInteractorError.invalidImagePath("backdropPath is empty."))}
+        let result = self.realm.objects(ImageConfiguration.self)
+        if result.count == 0 {
+            return self.getImageConfiguration()
+                    .flatMapLatest { (imgConfiguration) -> Observable<ImageState> in
+                        let imgConfiguration = result[0]
+                        let baseUrl = imgConfiguration.secure_base_url
+                        if imgConfiguration.poster_sizes.count > sizeLevel {
+                            let size = imgConfiguration.backdrop_sizes[sizeLevel]
+                            let imageUrl = "\(baseUrl)\(size)\(posterPath)"
+                            return self.getImage(urlString: imageUrl)
+                        } else {
+                            return Observable.error( ImageInteractorError.sizeLevelOutOfBounds("poster sizes \(sizeLevel) out of bound \(imgConfiguration.backdrop_sizes.count)"))
+                        }
+                    }
+        }
+        else {
+            let imgConfiguration = result[0]
+            let baseUrl = imgConfiguration.secure_base_url
+            if imgConfiguration.poster_sizes.count > sizeLevel {
+                let size = imgConfiguration.backdrop_sizes[sizeLevel]
+                let imageUrl = "\(baseUrl)\(size)\(posterPath)"
+                return self.getImage(urlString: imageUrl)
+            } else {
+                return Observable.error( ImageInteractorError.sizeLevelOutOfBounds("poster sizes \(sizeLevel) out of bound \(imgConfiguration.backdrop_sizes.count)"))
             }
         }
     }

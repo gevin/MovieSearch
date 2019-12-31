@@ -50,6 +50,10 @@ public class ActivityIndicator : SharedSequenceConvertibleType {
             .map { $0 > 0 }
             .distinctUntilChanged()
     }
+    
+    public var count: Int {
+        return _activityCount.value
+    }
 
     fileprivate func trackActivityOfObservable<O: ObservableConvertibleType>(_ source: O) -> Observable<O.E> {
         return Observable.using({ () -> ActivityToken<O.E> in

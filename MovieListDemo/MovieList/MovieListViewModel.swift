@@ -16,35 +16,33 @@ import SDWebImage
 protocol MovieListViewModelType: ViewModelType {
     
     // input 
-    func selectMovie( movieCellVM: MovieListCellViewModel )
+    func selectMovie( movieId: Int64 )
     func loadNextPage()
     
     // output
     var movieList: Driver<[MovieListCellViewModel]> {get}
     var loading: Driver<Bool> {get}
+    var isLoading: Bool {get}
     var error: Driver<Error> {get}
-    var loadedPages: Int {get}
+     
 }
 
 class MovieListViewModel: MovieListViewModelType {
-    
-    private var _loadingTrack     = ActivityIndicator()
-    private var _errorTrack       = ErrorTracker()
-    private var _movieCellVMs     = BehaviorRelay<[MovieListCellViewModel]>(value: [])
-    private var _movieBriefModels = [MovieBriefModel]()
-    var disposeBag                = DisposeBag()
-    
-    var loadedPages: Int = 0
-    var dataNumberOfPage: Int = 0
+
+    private var _loadingTrack      = ActivityIndicator()
+    private var _errorTrack        = ErrorTracker()
+    private var _movieCellVMs      = BehaviorRelay<[MovieListCellViewModel]>(value: [])
+    private var _movieBriefModels  = [MovieBriefModel]()
+    var disposeBag                 = DisposeBag()
 
     let coordinator: MovieListCoordinator
     let movieInteractor: MovieInteractor
     let imageInteractor: ImageInteractor
     
-    var notifyToken: NotificationToken? = nil
+    var movieNotifyToken: NotificationToken? = nil
     
     deinit {
-        notifyToken?.invalidate()
+        movieNotifyToken?.invalidate()
     }
     
     init( coordinator: MovieListCoordinator, movieInteractor: MovieInteractor, imageInteractor: ImageInteractor) {
@@ -55,19 +53,38 @@ class MovieListViewModel: MovieListViewModelType {
     
     /// ViewModel initial
     func initial() {
-        // observer Model update
-        notifyToken = self.movieInteractor.observeMovieList {[weak self] (changes:RealmCollectionChange<Results<MovieBriefModel>>) in
+        
+        // subscribe Book event
+        self.movieInteractor.bookedEvent
+            .subscribe(onNext: {[weak self] (movieId:Int64) in
+                guard let strongSelf = self else {return}
+                if let vm = strongSelf._movieCellVMs.value.first(where: {$0.identity == movieId}) {
+                    vm.booked.accept(true)
+                }
+            })
+            .disposed(by: self.disposeBag)
+        
+        self.movieInteractor.unbookedEvent
+            .subscribe(onNext: {[weak self] (movieId:Int64) in
+                guard let strongSelf = self else {return}
+                if let vm = strongSelf._movieCellVMs.value.first(where: {$0.identity == movieId}) {
+                    vm.booked.accept(false)
+                }
+            })
+            .disposed(by: self.disposeBag)
+        
+        // observe MovieBriefModel update
+        movieNotifyToken = self.movieInteractor.observeMovieList {[weak self] (changes:RealmCollectionChange<Results<MovieBriefModel>>) in
             guard let strongSelf = self else {return}
             switch changes {
             case .initial(let collection):
                 print("initial")
                 if collection.count > 0 {
-                    strongSelf.append(models: collection.toArray())
+                    strongSelf.appendModels(collection.toArray())
                 }
                 break
             case .update(let collection, let deletions, let insertions, let modifications):
-                
-                strongSelf.append(models: collection.toArray())
+                print("update.. page:\(strongSelf.movieInteractor.loadedPage())")
                 break
             case .error(let err):
                 strongSelf._errorTrack.raiseError(err)
@@ -75,16 +92,17 @@ class MovieListViewModel: MovieListViewModelType {
             }
         }
         
-        loadedPages = 1
+//        self.appendModels([])
         self.imageInteractor.getImageConfiguration() // download Image Configuration
             .flatMap({[weak self] (_) -> Observable<[MovieBriefModel]> in  // and then load movie list
                 guard let strongSelf = self else {return Observable.empty()}
-                return strongSelf.movieInteractor.queryMovieBriefList(page: 1)
+                return strongSelf.movieInteractor.loadNextPageMovieBriefList()
             })
             .trackActivity(self._loadingTrack)
             .trackError(self._errorTrack)
-            .subscribe(onNext: { (result:[MovieBriefModel]) in
-                print(result[0].backdrop_path)
+            .subscribe(onNext: {[weak self] (result:[MovieBriefModel]) in
+                guard let strongSelf = self else {return}
+                strongSelf.appendModels(result)
             })
             .disposed(by: self.disposeBag)
     }
@@ -97,16 +115,17 @@ class MovieListViewModel: MovieListViewModelType {
         self.movieInteractor.reloadMovieBriefList()
             .trackActivity(self._loadingTrack)
             .trackError(self._errorTrack)
-            .subscribe(onNext: {[weak self] (results:[MovieBriefModel]) in
+            .subscribe(onNext: {[weak self] (result:[MovieBriefModel]) in
                 guard let strongSelf = self else {return}
-                
+                strongSelf.removeAllModel()
+                strongSelf.appendModels(result)
             })
             .disposed(by: disposeBag)
     }
     
     /// Append local model array
     /// - Parameter models: MovieBriefModel array
-    private func append( models:[MovieBriefModel] ) {
+    private func appendModels(_ models:[MovieBriefModel] ) {
         // 新的在前
         let array = models.sorted { (m1, m2) -> Bool in
             let time1 = m1.release_date?.timeIntervalSince1970 ?? 0 
@@ -118,45 +137,59 @@ class MovieListViewModel: MovieListViewModelType {
         self._movieCellVMs.accept(cellVMs)     
     }
     
+    /// clear viewmodel cache
+    private func removeAllModel() {
+        self._movieBriefModels.removeAll()
+    }
+    
     /// Model -> ViewModel
     /// - Parameter models: MovieBriefModel array
     private func mapMovieListViewModel( models:[MovieBriefModel] ) -> [MovieListCellViewModel] {
         let cellVMs = models.map { (model:MovieBriefModel) -> MovieListCellViewModel in
             var cellVM = MovieListCellViewModel()
             cellVM.identity = model.id
-            cellVM.imageUrl = model.backdrop_path
+            cellVM.backdropUrl = model.backdrop_path
+            cellVM.posterUrl = model.poster_path
             cellVM.title.accept( model.title )
             cellVM.popularity.accept(model.popularity)
-            // download image 
-            if cellVM.imageUrl.count > 0 {
-                imageInteractor.getBackdropImage(backdropPath: cellVM.imageUrl, sizeLevel: 0)
+            cellVM.booked.accept( self.movieInteractor.isBooked(movieId: model.id) )
+            // download image, if backdrop image is nil, then continue to download poster image 
+            if cellVM.backdropUrl.count > 0 {
+                imageInteractor.getBackdropImage(backdropPath: cellVM.backdropUrl, sizeLevel: 0)
                     .bind(to: cellVM.image)
                     .disposed(by: disposeBag)
+            } else if cellVM.posterUrl.count > 0 {
+                imageInteractor.getPosterImage(posterPath: cellVM.posterUrl, sizeLevel: 0)
+                    .bind(to: cellVM.image)
+                    .disposed(by: disposeBag)
+            } else {
+                cellVM.image.accept(.completed(nil))
+                print("\(model.id) no image")
             }
             return cellVM
         }
         return cellVMs
     }
     
+    
 }
-
 
 // MARK: - input
 
 extension MovieListViewModel {
     
-    func selectMovie( movieCellVM: MovieListCellViewModel ) {
+    func selectMovie( movieId: Int64 ) {
         // move to detail
-        self.coordinator.gotoMovieDetail(movieId: movieCellVM.identity)
+        self.coordinator.gotoMovieDetail(movieId: movieId)
     }
     
     func loadNextPage() {
-        loadedPages += 1
-        self.movieInteractor.queryMovieBriefList(page: loadedPages)
+        self.movieInteractor.loadNextPageMovieBriefList()
             .trackActivity(self._loadingTrack)
             .trackError(self._errorTrack)
-            .subscribe(onNext: { ([MovieBriefModel]) in
-                
+            .subscribe(onNext: {[weak self] (result:[MovieBriefModel]) in
+                guard let strongSelf = self else {return}
+                strongSelf.appendModels(result)
             })
             .disposed(by: self.disposeBag)
     }
@@ -166,8 +199,8 @@ extension MovieListViewModel {
 
 extension MovieListViewModel {
     
-    var movieList: Driver<[MovieListCellViewModel]> { return _movieCellVMs.asDriver() }
+    var movieList: Driver<[MovieListCellViewModel]> { return _movieCellVMs.skip(1).asDriverOnErrorJustComplete() }
     var loading: Driver<Bool> { return self._loadingTrack.asDriver() }
     var error: Driver<Error> { return self._errorTrack.asDriver()}
-    
+    var isLoading: Bool {return self._loadingTrack.count > 0}
 }

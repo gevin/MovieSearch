@@ -11,12 +11,10 @@ import Realm
 import RealmSwift
 
 class LanguageInfoModel: Object, Decodable {
-    
     @objc dynamic var iso_639_1: String //"en",
     @objc dynamic var name: String //"English"
     
     override static func primaryKey() -> String? {
         return "iso_639_1"
     }
-    
 }

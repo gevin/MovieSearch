@@ -17,13 +17,19 @@ class AppCenter {
     let movieInteractor: MovieInteractor
     let imageInteractor: ImageInteractor
     
-    init( apiClient: APIClient, realm: Realm ) {
+    private static var _instance: AppCenter?
+    static func initial( apiClient: APIClient, realm: Realm ) {
+        let instance = AppCenter( apiClient: apiClient, realm: realm)
+        _instance = instance
+    }
+    static let shared: AppCenter = { return _instance! }()
+    
+    private init( apiClient: APIClient, realm: Realm ) {
         self.apiClient = apiClient
         self.realm = realm
         
         self.movieInteractor = MovieInteractor(apiClient: self.apiClient, realm: self.realm)
         self.imageInteractor = ImageInteractor(apiClient: self.apiClient, realm: self.realm)
-        
     }
 
 }
