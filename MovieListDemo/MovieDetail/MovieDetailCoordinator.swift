@@ -60,7 +60,7 @@ class MovieDetailCoordinator: CoordinatorType {
     }
     
     func back() {
-        
+        self._navigationController?.popViewController(animated: true)
     }
 
 }

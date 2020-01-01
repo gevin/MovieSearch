@@ -49,7 +49,7 @@ class MovieListCell: UICollectionViewCell {
         return cell
     }
     
-    // 寬固定，延展高
+    // 延展高
     override func preferredLayoutAttributesFitting(_ layoutAttributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
         layoutAttributes.frame.size.height = contentView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height
         return layoutAttributes
@@ -70,12 +70,12 @@ class MovieListCell: UICollectionViewCell {
             .subscribe(onNext: {[weak self] (state:ImageState) in
                 guard let strongSelf = self else {return}
                 strongSelf.backdropImageView.setState(state)
-                if let size = strongSelf.backdropImageView.image?.size {
-                    let factor = strongSelf.backdropImageView.frame.size.width / size.width 
-                    strongSelf.imageViewHeightConstraint.constant = size.height * factor
-                }
-                strongSelf.setNeedsUpdateConstraints()
-                strongSelf.setNeedsLayout()
+//                if let size = strongSelf.backdropImageView.image?.size {
+//                    let factor = strongSelf.backdropImageView.frame.size.width / size.width 
+//                    strongSelf.imageViewHeightConstraint.constant = size.height * factor
+//                }
+//                strongSelf.setNeedsUpdateConstraints()
+//                strongSelf.setNeedsLayout()
             })
             .disposed(by: self.disposeBag)
         

@@ -21,6 +21,10 @@ enum MovieInteractorError: Error {
 
 protocol MovieInteractorType : InteractorType {
     
+    // run time data
+    func getMovieListConfig() -> MovieListConfig
+    func loadedPage() -> Int
+    
     // Movie List
     func loadNextPageMovieBriefList() -> Observable<[MovieBriefModel] >
     func reloadMovieBriefList() -> Observable<[MovieBriefModel] >
@@ -59,11 +63,14 @@ class MovieInteractor: MovieInteractorType {
         self.realm = realm
     }
     
+    /// stored data which generated in runtime in MovieListConfig, did not stored in this instance
     func getMovieListConfig() -> MovieListConfig {
         let result = self.realm.objects(MovieListConfig.self)
         if result.count == 0 {
             let model = MovieListConfig()
             try! self.realm.write {
+                model.dataNumOfPage = 0
+                model.loadedPage = 0
                 self.realm.add(model)
             }
             return model
@@ -82,7 +89,6 @@ class MovieInteractor: MovieInteractorType {
     func loadNextPageMovieBriefList() -> Observable<[MovieBriefModel] > {
         
         let movieListConfig = self.getMovieListConfig()
-        // 記錄一頁幾筆資料
         try! self.realm.write {
             movieListConfig.loadedPage += 1
         }
@@ -113,6 +119,12 @@ class MovieInteractor: MovieInteractorType {
     }
     
     func reloadMovieBriefList() -> Observable<[MovieBriefModel] > {
+        
+        let movieListConfig = self.getMovieListConfig()
+        try! self.realm.write {
+            movieListConfig.loadedPage = 1
+        }
+        
         var movieQueryData = MovieDiscoverQuery()
         movieQueryData.page = 1
         movieQueryData.primary_release_date_lte = "2016-12-31"
@@ -127,6 +139,7 @@ class MovieInteractor: MovieInteractorType {
                 do {
                     let result = strongSelf.realm.objects(MovieBriefModel.self)
                     try strongSelf.realm.write {
+                        movieListConfig.dataNumOfPage = models.count 
                         strongSelf.realm.delete(result)
                         strongSelf.realm.add(models)
                     }
@@ -156,14 +169,6 @@ class MovieInteractor: MovieInteractorType {
         return self.apiClient.movieDetail(movieId: movieId, language: "\(languageCode)-\(regionCode)")
             .observeOn(MainScheduler.instance)
             .debug()
-//            .do(onNext: {[weak self] (response) in
-//                do {
-//                    let dict = try JSONSerialization.jsonObject(with: response.data, options: JSONSerialization.ReadingOptions.allowFragments)
-//                    //print("receive:\n\(dict)")
-//                } catch {
-//                    print(error)
-//                }
-//            })
             .map(MovieDetailModel.self)
             .do(onNext: {[weak self] (model:MovieDetailModel) in
                 guard let strongSelf = self else { return }
@@ -242,7 +247,7 @@ class MovieInteractor: MovieInteractorType {
         let bookData = BookedMovie()
         try! self.realm.write {
             bookData.booktime = Date().timeIntervalSince1970
-            print("booked movieId:\(movieId)")
+            //print("booked movieId:\(movieId)")
             bookData.movieId = movieId
             self.realm.add(bookData)
         }

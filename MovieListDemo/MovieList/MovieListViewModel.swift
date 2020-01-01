@@ -36,8 +36,8 @@ class MovieListViewModel: MovieListViewModelType {
     var disposeBag                 = DisposeBag()
 
     let coordinator: MovieListCoordinator
-    let movieInteractor: MovieInteractor
-    let imageInteractor: ImageInteractor
+    let movieInteractor: MovieInteractorType
+    let imageInteractor: ImageInteractorType
     
     var movieNotifyToken: NotificationToken? = nil
     
@@ -45,7 +45,7 @@ class MovieListViewModel: MovieListViewModelType {
         movieNotifyToken?.invalidate()
     }
     
-    init( coordinator: MovieListCoordinator, movieInteractor: MovieInteractor, imageInteractor: ImageInteractor) {
+    init( coordinator: MovieListCoordinator, movieInteractor: MovieInteractorType, imageInteractor: ImageInteractorType) {
         self.coordinator     = coordinator
         self.movieInteractor = movieInteractor
         self.imageInteractor = imageInteractor
@@ -84,6 +84,8 @@ class MovieListViewModel: MovieListViewModelType {
                 }
                 break
             case .update(let collection, let deletions, let insertions, let modifications):
+                // collection is final results
+                // deletions , insertions , odifications are object indeis in collection 
                 print("update.. page:\(strongSelf.movieInteractor.loadedPage())")
                 break
             case .error(let err):

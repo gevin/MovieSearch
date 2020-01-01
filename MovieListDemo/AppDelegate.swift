@@ -31,7 +31,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // APIClient configure
         let apiClient = APIClient()
                 
-        
         // clear old data
         try! realm.write {
             realm.deleteAll()

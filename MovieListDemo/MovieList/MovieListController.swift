@@ -111,7 +111,9 @@ class MovieListController: UIViewController, ViewType {
     }
     
     func collectionViewConfigure() {
+        
         self.collectionView.delegate = self
+        
         // pulldown to refresh 
         if #available( iOS 10.0, *) {
             self.collectionView.refreshControl = self.refreshControl
@@ -135,25 +137,25 @@ class MovieListController: UIViewController, ViewType {
         
         // register cell
         self.collectionView.register(UINib(nibName: "MovieListCell", bundle: nil), forCellWithReuseIdentifier: "MovieListCell")
-        if let layout = self.collectionView.collectionViewLayout as? UICollectionViewFlowLayout {
-            layout.estimatedItemSize = CGSize(width: UIScreen.main.bounds.size.width - 32, height: 50)
-        }
+        
         // config cell
-        let dataSource = MyCollectionAnimationDataSource<MovieListSectionModel>(configureCell: { (_, collectionView, indexPath, model: MovieListCellViewModel ) -> UICollectionViewCell in
+        let dataSource = MyCollectionDataSource<MovieListSectionModel>(configureCell: { (_, collectionView, indexPath, model: MovieListCellViewModel ) -> UICollectionViewCell in
             let cell = MovieListCell.cellWith(collectionView: collectionView, indexPath: indexPath)
             cell.configure(viewModel: model, collectionView: collectionView, indexPath: indexPath)
             return cell
         })
+        
+        // bind data source
         self.sectionRelay.bind(to: self.collectionView.rx.items(dataSource: dataSource) ).disposed(by: disposeBag)
         
-        // reload data
+//        // reload data
 //        dataSource.dataReloded.asObservable()
-//            .filter({_ in !self.isLoadMore})
 //            .subscribe(onNext: {[weak self] (event:Event<[MovieListSectionModel]>) in
 //                guard let strongSelf = self else {return}
-//                DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 1.0, execute: { 
-//                    strongSelf.collectionView.layoutIfNeeded()
-//                })
+//                // pull down to refresh
+//                if !strongSelf.isLoadMore {
+//                    strongSelf.collectionView.contentOffset = CGPoint.zero
+//                }
 //            })
 //            .disposed(by: self.disposeBag)
         
@@ -167,8 +169,10 @@ class MovieListController: UIViewController, ViewType {
             .flatMap { state in state ? Signal.just(()) : Signal.empty() }
             .do(onNext: {[weak self] () in
                 guard let strongSelf = self else {return}
+                
                 // save original offset
                 strongSelf.original_offset = strongSelf.collectionView.contentOffset
+                
                 // trigger load next page
                 strongSelf.viewModel?.loadNextPage()
                 strongSelf.isLoadMore = true
@@ -176,10 +180,11 @@ class MovieListController: UIViewController, ViewType {
             .flatMap({ () -> Observable<Event<[MovieListSectionModel]>> in
                 return dataSource.dataReloded.asObservable() // observe collectionView reloadData completed event
             })
+            .filter({_ in self.isLoadMore})
             .subscribe(onNext: {[weak self] (_) in
                 guard let strongSelf = self else {return}
-                // when reload completed, adjust content offset and set isLoadMore = false 
-                print("offset:\(strongSelf.collectionView.contentOffset)")
+                // when reload completed, adjust content offset to previous position and set isLoadMore = false 
+                //print("offset:\(strongSelf.collectionView.contentOffset)")
                 strongSelf.collectionView.setContentOffset(strongSelf.original_offset, animated: false)
                 strongSelf.isLoadMore = false
             })
@@ -187,10 +192,16 @@ class MovieListController: UIViewController, ViewType {
     }
 }
 
-extension MovieListController: UICollectionViewDelegate {
+extension MovieListController: UICollectionViewDelegateFlowLayout {
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let cellViewModel = self.sectionRelay.value[indexPath.section].items[indexPath.row]
         self.viewModel?.selectMovie(movieId: cellViewModel.identity)
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        var cellViewModel = self.sectionRelay.value[indexPath.section].items[indexPath.row]
+        cellViewModel.cellHeight = cellViewModel.calculateHeight(fixedWidth: UIScreen.main.bounds.size.width - 16)
+        return CGSize(width: UIScreen.main.bounds.size.width - 16, height: cellViewModel.cellHeight)
     }
 }

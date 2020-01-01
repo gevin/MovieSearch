@@ -16,18 +16,6 @@ protocol CoordinatorType: AnyObject {
     func back()
 }
 
-//class BaseCoordinator: CoordinatorType {
-//    var viewController: UIViewController?
-//    var childCoordinators: [CoordinatorType] = []
-//    func start() {
-//        fatalError("Start method must be implemented")
-//    }
-//    
-//    func back() {
-//        
-//    }
-//}
-
 protocol ViewModelType {
     func initial()
     func refresh()

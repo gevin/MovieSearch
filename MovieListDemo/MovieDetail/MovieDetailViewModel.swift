@@ -31,8 +31,8 @@ protocol MovieDetailViewModelType: ViewModelType {
 class MovieDetailViewModel: MovieDetailViewModelType {
     
     let coordinator: MovieDetailCoordinator
-    let movieInteractor: MovieInteractor
-    let imageInteractor: ImageInteractor
+    let movieInteractor: MovieInteractorType
+    let imageInteractor: ImageInteractorType
     
     var movieId: Int64 = 0
     
@@ -54,7 +54,7 @@ class MovieDetailViewModel: MovieDetailViewModelType {
         print("MovieDetailViewModel dealloc")
     }
     
-    init( coordinator: MovieDetailCoordinator, movieInteractor: MovieInteractor, imageInteractor: ImageInteractor, movieId: Int64 ) {
+    init( coordinator: MovieDetailCoordinator, movieInteractor: MovieInteractorType, imageInteractor: ImageInteractorType, movieId: Int64 ) {
         self.coordinator     = coordinator
         self.movieInteractor = movieInteractor
         self.imageInteractor = imageInteractor
@@ -63,6 +63,7 @@ class MovieDetailViewModel: MovieDetailViewModelType {
     
     func initial() {
         
+        // has booked
         let booked = self.movieInteractor.isBooked(movieId: self.movieId)
         _isBooked.accept(booked)
         
