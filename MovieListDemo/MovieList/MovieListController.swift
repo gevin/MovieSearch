@@ -52,8 +52,6 @@ class MovieListController: UIViewController, ViewType {
     
     var isLoadMore: Bool = false
     
-    var original_offset: CGPoint = CGPoint.zero
-    
     var noDataView = NoDataView.create()
     
     override func viewDidLoad() {
@@ -89,6 +87,9 @@ class MovieListController: UIViewController, ViewType {
                     sections[0].items = list
                     strongSelf.sectionRelay.accept(sections)
                 }
+                if var layout = strongSelf.collectionView.collectionViewLayout as? MyLayout {
+                    layout.model = list
+                }
             })
             .disposed(by: disposeBag)
         
@@ -114,6 +115,11 @@ class MovieListController: UIViewController, ViewType {
         
         self.collectionView.delegate = self
         
+        collectionView.collectionViewLayout = MyLayout()
+//        if var layout = collectionView.collectionViewLayout as? UICollectionViewFlowLayout {
+//            let width = UIScreen.main.bounds.size.width
+//            layout.estimatedItemSize = CGSize(width: width-32, height: 10)
+//        }
         // pulldown to refresh 
         if #available( iOS 10.0, *) {
             self.collectionView.refreshControl = self.refreshControl
@@ -166,29 +172,37 @@ class MovieListController: UIViewController, ViewType {
                 return self.collectionView.isNearBottomEdge(edgeOffset: 20.0) && !self.isLoadMore 
             })
             .withLatestFrom(self.rx.viewDidAppear)
-            .flatMap { state in state ? Signal.just(()) : Signal.empty() }
-            .do(onNext: {[weak self] () in
+            .filter({$0})
+            .do(onNext: {[weak self] (_) in
                 guard let strongSelf = self else {return}
-                
-                // save original offset
-                strongSelf.original_offset = strongSelf.collectionView.contentOffset
-                
                 // trigger load next page
                 strongSelf.viewModel?.loadNextPage()
                 strongSelf.isLoadMore = true
             })
-            .flatMap({ () -> Observable<Event<[MovieListSectionModel]>> in
+            .flatMap({ (_) -> Observable<Event<[MovieListSectionModel]>> in
                 return dataSource.dataReloded.asObservable() // observe collectionView reloadData completed event
             })
             .filter({_ in self.isLoadMore})
             .subscribe(onNext: {[weak self] (_) in
                 guard let strongSelf = self else {return}
-                // when reload completed, adjust content offset to previous position and set isLoadMore = false 
-                //print("offset:\(strongSelf.collectionView.contentOffset)")
-                strongSelf.collectionView.setContentOffset(strongSelf.original_offset, animated: false)
                 strongSelf.isLoadMore = false
             })
             .disposed(by: self.disposeBag)
+    }
+    
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        if var layout = collectionView.collectionViewLayout as? UICollectionViewFlowLayout {
+            layout.estimatedItemSize = CGSize(width: view.bounds.size.width, height: 10)
+        }
+        super.traitCollectionDidChange(previousTraitCollection)
+    }
+    
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        if var layout = collectionView.collectionViewLayout as? UICollectionViewFlowLayout {
+            layout.estimatedItemSize = CGSize(width: view.bounds.size.width, height: 10)
+            layout.invalidateLayout()
+        }
+        super.viewWillTransition(to: size, with: coordinator)
     }
 }
 
@@ -201,7 +215,120 @@ extension MovieListController: UICollectionViewDelegateFlowLayout {
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         var cellViewModel = self.sectionRelay.value[indexPath.section].items[indexPath.row]
-        cellViewModel.cellHeight = cellViewModel.calculateHeight(fixedWidth: UIScreen.main.bounds.size.width - 16)
-        return CGSize(width: UIScreen.main.bounds.size.width - 16, height: cellViewModel.cellHeight)
+        if cellViewModel.cellHeight == 0 {
+            cellViewModel.cellHeight = cellViewModel.calculateHeight(fixedWidth: UIScreen.main.bounds.size.width-32)
+        }
+        return CGSize(width: UIScreen.main.bounds.size.width-32, height: cellViewModel.cellHeight)
+    }
+}
+
+
+class MyLayout: UICollectionViewLayout {
+    
+    var model: [MovieListCellViewModel] = []
+    
+    var contentHeight: CGFloat = 0
+    
+    var cache: [UICollectionViewLayoutAttributes] = []
+    
+    // Returns the width of the collection view 
+    var width: CGFloat {
+      return collectionView!.bounds.width
+    }
+    
+    // Returns the height of the collection view 
+    var height: CGFloat {
+      return collectionView!.bounds.height
+    }
+    
+    // Returns the number of items in the collection view 
+    var numberOfItems: Int {
+        if model.count > 0 {
+            return collectionView!.numberOfItems(inSection: 0)
+        }
+        return 0
+    }
+
+}
+
+// MARK: UICollectionViewLayout
+
+extension MyLayout {
+
+    /// keep calling while scrolling.
+    override func prepare() {
+        cache.removeAll(keepingCapacity: false)
+    
+        let smallScale: CGFloat = 0.5
+        let standardScale: CGFloat = 1.0
+  
+        var frame = CGRect.zero
+        var itemY: CGFloat = 0
+        
+        for item in 0..<numberOfItems {
+            let indexPath = IndexPath(item: item, section: 0)
+            let attributes = UICollectionViewLayoutAttributes(forCellWith: indexPath)
+            // Important because each cell has to slide over the top of the previous one 
+            attributes.zIndex = item
+            
+            if model[item].cellHeight == 0 {
+                model[item].cellHeight = model[item].calculateHeight(fixedWidth: self.width - 32)
+            }
+            let itemHeight: CGFloat = model[item].cellHeight  
+            
+            // Initially set the height of the cell to the standard height
+            var transform = CATransform3DIdentity
+            transform.m34 = -2.5 / 2000.0
+            transform = CATransform3DTranslate(transform, 10, 0, -150.0)
+            transform = CATransform3DRotate(transform, CGFloat.pi * (-30.0/180.0), 1.0, 0.0, 0.0)
+            
+            var interpolate = (itemY - collectionView!.contentOffset.y)
+            if interpolate < 0 { interpolate = 0 }
+            if interpolate > 150 { interpolate = 150 }
+            interpolate = interpolate/150.0
+            let scale = 0.8 + ( (1.0 - 0.8) * interpolate)
+            transform = CATransform3DScale(transform, scale, scale, 1.0)
+            attributes.transform3D = transform
+                
+            var bounds = CGRect(x: 0, y: 0, width: self.width - 32, height: itemHeight)
+            let transformedBounds = bounds.applying( CATransform3DGetAffineTransform(transform) )
+//            print("\(item) transform:\(transformedBounds.size.height), original:\(itemHeight)")
+
+            frame = CGRect(x: 0, y: itemY, width: self.width - 32, height: transformedBounds.size.height )
+            attributes.bounds = bounds
+            attributes.frame = frame
+            cache.append(attributes)
+            itemY = frame.maxY - (transformedBounds.size.height*0.2)
+        }
+        contentHeight = itemY
+    }
+    
+    // Return the size of all the content in the collection view 
+    override var collectionViewContentSize : CGSize {
+        return CGSize(width: width, height: contentHeight)
+    }
+  
+    // Return all attributes in the cache whose frame intersects with the rect passed to the method 
+    override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
+        var layoutAttributes: [UICollectionViewLayoutAttributes] = []
+        for attributes in cache {
+            if attributes.frame.intersects(rect) {
+                layoutAttributes.append(attributes)
+            }
+        }
+        return layoutAttributes
+    }
+  
+    // 會拉回定點，像 page 那樣 
+    // Return the content offset of the nearest cell which achieves the nice snapping effect, similar to a paged UIScrollView 
+//    override func targetContentOffset(forProposedContentOffset proposedContentOffset: CGPoint, withScrollingVelocity velocity: CGPoint) -> CGPoint {
+//        let itemIndex = round(proposedContentOffset.y / dragOffset)
+//        let yOffset = itemIndex * dragOffset
+//        return CGPoint(x: 0, y: yOffset)
+//    }
+
+    // Return true so that the layout is continuously invalidated as the user scrolls 
+    override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
+        return true
     }
 }

@@ -80,12 +80,13 @@ class MovieListViewModel: MovieListViewModelType {
             case .initial(let collection):
                 print("initial")
                 if collection.count > 0 {
-                    strongSelf.appendModels(collection.toArray())
+                    strongSelf.updateModels(collection.toArray())
                 }
                 break
             case .update(let collection, let deletions, let insertions, let modifications):
                 // collection is final results
                 // deletions , insertions , odifications are object indeis in collection 
+                strongSelf.updateModels(collection.toArray())
                 print("update.. page:\(strongSelf.movieInteractor.loadedPage())")
                 break
             case .error(let err):
@@ -93,8 +94,7 @@ class MovieListViewModel: MovieListViewModelType {
                 break
             }
         }
-        
-//        self.appendModels([])
+
         self.imageInteractor.getImageConfiguration() // download Image Configuration
             .flatMap({[weak self] (_) -> Observable<[MovieBriefModel]> in  // and then load movie list
                 guard let strongSelf = self else {return Observable.empty()}
@@ -104,44 +104,23 @@ class MovieListViewModel: MovieListViewModelType {
             .trackError(self._errorTrack)
             .subscribe(onNext: {[weak self] (result:[MovieBriefModel]) in
                 guard let strongSelf = self else {return}
-                strongSelf.appendModels(result)
+                
             })
             .disposed(by: self.disposeBag)
     }
     
-    /// reload local MovieBriefModel Data.
-    /// It would be clear all MovieBriefModel data in Realm and refetch data from server.
-    func refresh() {
-        
-        self._movieBriefModels.removeAll()
-        self.movieInteractor.reloadMovieBriefList()
-            .trackActivity(self._loadingTrack)
-            .trackError(self._errorTrack)
-            .subscribe(onNext: {[weak self] (result:[MovieBriefModel]) in
-                guard let strongSelf = self else {return}
-                strongSelf.removeAllModel()
-                strongSelf.appendModels(result)
-            })
-            .disposed(by: disposeBag)
-    }
-    
     /// Append local model array
     /// - Parameter models: MovieBriefModel array
-    private func appendModels(_ models:[MovieBriefModel] ) {
+    private func updateModels(_ models:[MovieBriefModel] ) {
         // 新的在前
         let array = models.sorted { (m1, m2) -> Bool in
             let time1 = m1.release_date?.timeIntervalSince1970 ?? 0 
             let time2 = m2.release_date?.timeIntervalSince1970 ?? 0 
             return time1 > time2 
         }
-        self._movieBriefModels.append(contentsOf: models)
+        self._movieBriefModels = models
         let cellVMs = self.mapMovieListViewModel(models: self._movieBriefModels)
         self._movieCellVMs.accept(cellVMs)     
-    }
-    
-    /// clear viewmodel cache
-    private func removeAllModel() {
-        self._movieBriefModels.removeAll()
     }
     
     /// Model -> ViewModel
@@ -191,9 +170,26 @@ extension MovieListViewModel {
             .trackError(self._errorTrack)
             .subscribe(onNext: {[weak self] (result:[MovieBriefModel]) in
                 guard let strongSelf = self else {return}
-                strongSelf.appendModels(result)
+//                strongSelf.appendModels(result)
             })
             .disposed(by: self.disposeBag)
+    }
+    
+        
+    /// reload local MovieBriefModel Data.
+    /// It would be clear all MovieBriefModel data in Realm and refetch data from server.
+    func refresh() {
+        
+        self._movieBriefModels.removeAll()
+        self.movieInteractor.reloadMovieBriefList()
+            .trackActivity(self._loadingTrack)
+            .trackError(self._errorTrack)
+            .subscribe(onNext: {[weak self] (result:[MovieBriefModel]) in
+                guard let strongSelf = self else {return}
+//                strongSelf.removeAllModel()
+//                strongSelf.appendModels(result)
+            })
+            .disposed(by: disposeBag)
     }
 }
 

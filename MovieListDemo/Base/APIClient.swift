@@ -12,6 +12,11 @@ import RxCocoa
 import Moya
 import Alamofire
 
+/*
+ https://developers.themoviedb.org/3/getting-started/introduction
+ 
+ */
+
 enum MovieAPI {
     static let baseURLString = "https://api.themoviedb.org/3"
     case movieDiscover( querys: [String: Any] )

@@ -17,7 +17,12 @@ class MovieListCell: UICollectionViewCell {
     @IBOutlet weak var popularityLabel: UILabel!
     @IBOutlet weak var bookedLabel: UILabel!
     @IBOutlet weak var idLabel: UILabel!
-    @IBOutlet weak var imageViewHeightConstraint: NSLayoutConstraint!
+    
+    lazy var width: NSLayoutConstraint = {
+        let width = contentView.widthAnchor.constraint(equalToConstant: bounds.size.width)
+        width.isActive = true
+        return width
+    }()
     
     let noImageLabel = UILabel()
     
@@ -26,6 +31,7 @@ class MovieListCell: UICollectionViewCell {
     override func awakeFromNib() {
         super.awakeFromNib()
         // Initialization code
+        self.contentView.backgroundColor = UIColor.white
         self.contentView.layer.cornerRadius = 7
         self.contentView.layer.borderColor = UIColor.gray.cgColor
         self.contentView.layer.borderWidth = 1
@@ -33,11 +39,12 @@ class MovieListCell: UICollectionViewCell {
         noImageLabel.font = UIFont.systemFont(ofSize: 20, weight: UIFont.Weight.bold)
         noImageLabel.textColor = UIColor.gray
         noImageLabel.textAlignment = .center
+        noImageLabel.translatesAutoresizingMaskIntoConstraints = false
     }
     
     override func prepareForReuse() {
         super.prepareForReuse()
-        backdropImageView.image = nil
+        backdropImageView.setState(ImageState.none)
         titleLabel.text = ""
         popularityLabel.text = ""
         self.noImageLabel.removeFromSuperview()
@@ -49,14 +56,13 @@ class MovieListCell: UICollectionViewCell {
         return cell
     }
     
-    // 延展高
-    override func preferredLayoutAttributesFitting(_ layoutAttributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
-        layoutAttributes.frame.size.height = contentView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height
-        return layoutAttributes
+    override func systemLayoutSizeFitting(_ targetSize: CGSize, withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority, verticalFittingPriority: UILayoutPriority) -> CGSize {
+       width.constant = bounds.size.width // add constraint to contentView 
+       return contentView.systemLayoutSizeFitting(CGSize(width: targetSize.width, height: 1))
     }
     
     func configure( viewModel: MovieListCellViewModel, collectionView: UICollectionView, indexPath: IndexPath) {
-        self.idLabel.text = "\(viewModel.identity)"
+//        self.idLabel.text = "\(viewModel.identity)"
         viewModel.title
             .bind(to: self.titleLabel.rx.text )
             .disposed(by: self.disposeBag)
@@ -69,36 +75,49 @@ class MovieListCell: UICollectionViewCell {
         viewModel.image
             .subscribe(onNext: {[weak self] (state:ImageState) in
                 guard let strongSelf = self else {return}
+               
+                switch state {
+                case .none:
+                    strongSelf.displayNoImage(true)
+                case .completed(let imageOrNil):
+                    if let image = imageOrNil {
+                        strongSelf.displayNoImage(false)
+                    } else {
+                        strongSelf.displayNoImage(true)
+                    }
+                case .loading:
+                    strongSelf.displayNoImage(false)
+                    break
+                case .error(_):
+                    strongSelf.displayNoImage(true)
+                }
                 strongSelf.backdropImageView.setState(state)
-//                if let size = strongSelf.backdropImageView.image?.size {
-//                    let factor = strongSelf.backdropImageView.frame.size.width / size.width 
-//                    strongSelf.imageViewHeightConstraint.constant = size.height * factor
-//                }
-//                strongSelf.setNeedsUpdateConstraints()
-//                strongSelf.setNeedsLayout()
             })
             .disposed(by: self.disposeBag)
         
-        viewModel.booked
-            .map({!$0})
-            .bind(to: self.bookedLabel.rx.isHidden)
-            .disposed(by: self.disposeBag)
+//        viewModel.booked
+//            .map({!$0})
+//            .bind(to: self.bookedLabel.rx.isHidden)
+//            .disposed(by: self.disposeBag)
     }
     
     override func updateConstraints() {
+        
         super.updateConstraints()
-        if self.backdropImageView.image == nil {
+    }
+    
+    func displayNoImage(_ display: Bool) {
+        if display {
+
             self.contentView.addSubview(self.noImageLabel)
             self.noImageLabel.translatesAutoresizingMaskIntoConstraints = false
-            self.contentView.addConstraint( NSLayoutConstraint(item: self.noImageLabel, attribute: NSLayoutConstraint.Attribute.leading,  relatedBy: NSLayoutConstraint.Relation.equal, toItem: self.backdropImageView, attribute: NSLayoutConstraint.Attribute.leading,  multiplier: 1.0, constant: 0) )
-            self.contentView.addConstraint( NSLayoutConstraint(item: self.noImageLabel, attribute: NSLayoutConstraint.Attribute.top,      relatedBy: NSLayoutConstraint.Relation.equal, toItem: self.backdropImageView, attribute: NSLayoutConstraint.Attribute.top,      multiplier: 1.0, constant: 0) )
-            self.contentView.addConstraint( NSLayoutConstraint(item: self.noImageLabel, attribute: NSLayoutConstraint.Attribute.trailing, relatedBy: NSLayoutConstraint.Relation.equal, toItem: self.backdropImageView, attribute: NSLayoutConstraint.Attribute.trailing, multiplier: 1.0, constant: 0) )
-            self.contentView.addConstraint( NSLayoutConstraint(item: self.noImageLabel, attribute: NSLayoutConstraint.Attribute.bottom,   relatedBy: NSLayoutConstraint.Relation.equal, toItem: self.backdropImageView, attribute: NSLayoutConstraint.Attribute.bottom,   multiplier: 1.0, constant: 0) )
-            self.imageViewHeightConstraint.constant = 200
+            self.contentView.addConstraint(self.noImageLabel.topAnchor.constraint(equalTo: self.backdropImageView.topAnchor))
+            self.contentView.addConstraint(self.noImageLabel.leftAnchor.constraint(equalTo: self.backdropImageView.leftAnchor))
+            self.contentView.addConstraint(self.noImageLabel.rightAnchor.constraint(equalTo: self.backdropImageView.rightAnchor))
+            self.contentView.addConstraint(self.noImageLabel.bottomAnchor.constraint(equalTo: self.backdropImageView.bottomAnchor))
         } else {
             self.noImageLabel.removeFromSuperview()
-            
         }
     }
-
+    
 }

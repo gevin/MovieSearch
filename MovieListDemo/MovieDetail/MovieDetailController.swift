@@ -27,7 +27,14 @@ class MovieDetailController: UIViewController, ViewType {
     
     @IBOutlet weak var bookButton: UIButton!
     
-    var noImageLabel: UILabel = UILabel() 
+    lazy var noImageLabel: UILabel = { 
+        let label = UILabel()
+        label.text = "No Image"
+        label.font = UIFont.systemFont(ofSize: 20, weight: UIFont.Weight.bold)
+        label.textColor = UIColor.gray
+        label.textAlignment = .center
+        return label
+    }() 
     
     deinit {
         print("MovieDetailController dealloc")
@@ -35,12 +42,6 @@ class MovieDetailController: UIViewController, ViewType {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        self.noImageLabel.text = "No Image"
-        self.noImageLabel.font = UIFont.systemFont(ofSize: 20, weight: UIFont.Weight.bold)
-        self.noImageLabel.textColor = UIColor.gray
-        self.noImageLabel.textAlignment = .center
-        
         self.bindUI()
         self.viewModel?.initial()
     }

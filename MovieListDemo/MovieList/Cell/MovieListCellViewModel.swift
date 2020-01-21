@@ -20,8 +20,9 @@ struct MovieListCellViewModel: IdentifiableType, Equatable {
     var title: BehaviorRelay<String>
     var popularity: BehaviorRelay<Float>
     var booked: BehaviorRelay<Bool>
-    var cellHeight: CGFloat
+//    var imageHeight: CGFloat
     var disposeBag = DisposeBag()
+    var cellHeight: CGFloat
     
     init() {
         self.image = BehaviorRelay<ImageState>(value: .none)
@@ -41,6 +42,10 @@ struct MovieListCellViewModel: IdentifiableType, Equatable {
         }
         return false
     }
+    
+//    mutating func setImageHeight( height: CGFloat ) {
+//        self.imageHeight = height
+//    }
     
     func calculateHeight(fixedWidth: CGFloat) -> CGFloat {
         var height:CGFloat = 0.0
@@ -70,5 +75,4 @@ struct MovieListCellViewModel: IdentifiableType, Equatable {
         
         return CGFloat(8 + imageHeight + 8 + popularityHeight + 8 + titleHeight + 12)
     }
-    
 }
